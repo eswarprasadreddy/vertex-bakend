@@ -3,10 +3,10 @@ package com.example.demo.controller;
 import com.example.demo.DTO.*;
 import com.example.demo.entity.Question;
 import com.example.demo.service.QuestionService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -31,6 +31,19 @@ public class Problem {
         return ResponseEntity.ok(service.generateQuestions(req));
     }
 
+    // 1) Run -> only example cases from question
+    @PostMapping("/run-code")
+    public ResponseEntity<JudgeCodeResponse> runCode(@RequestBody ReviewCodeRequest request) {
+        return ResponseEntity.ok(service.runCode(request));
+    }
+
+    // 2) Submit -> stricter hidden/edge-case style judging
+    @PostMapping("/submit-code")
+    public ResponseEntity<JudgeCodeResponse> submitCode(@RequestBody ReviewCodeRequest request) {
+        return ResponseEntity.ok(service.submitCode(request));
+    }
+
+    // 3) AI Review -> only better approach + complexity comparison
     @PostMapping("/review-code")
     public ResponseEntity<ReviewCodeResponse> reviewCode(@RequestBody ReviewCodeRequest request) {
         return ResponseEntity.ok(service.reviewCode(request));
@@ -47,7 +60,7 @@ public class Problem {
         return ResponseEntity.ok(service.getQuestions(page, size, topic, pattern, difficulty));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/id/{id}")
     public ResponseEntity<QuestionResponse> getQuestionById(@PathVariable Long id) {
         QuestionResponse q = service.getquestion(id);
         if (q == null) return ResponseEntity.notFound().build();
@@ -68,7 +81,7 @@ public class Problem {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
     }

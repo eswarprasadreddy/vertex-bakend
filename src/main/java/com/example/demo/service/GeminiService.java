@@ -49,93 +49,89 @@ public class GeminiService {
 
     public String generateQuestions(String topic, String pattern, String difficulty, int count) {
         String prompt = buildGeneratePrompt(topic, pattern, difficulty, count);
-
-        String url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + apiKey;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        Map<String, Object> part = new HashMap<>();
-        part.put("text", prompt);
-
-        List<Map<String, Object>> parts = new ArrayList<>();
-        parts.add(part);
-
-        Map<String, Object> content = new HashMap<>();
-        content.put("parts", parts);
-
-        List<Map<String, Object>> contents = new ArrayList<>();
-        contents.add(content);
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("contents", contents);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-        Map responseBody = response.getBody();
-
-        if (responseBody == null) {
-            throw new RuntimeException("Gemini returned empty response");
-        }
-
-        List candidates = (List) responseBody.get("candidates");
-        if (candidates == null || candidates.isEmpty()) {
-            throw new RuntimeException("Gemini returned no candidates: " + responseBody);
-        }
-
-        Map firstCandidate = (Map) candidates.get(0);
-        Map contentMap = (Map) firstCandidate.get("content");
-        List responseParts = (List) contentMap.get("parts");
-        Map firstPart = (Map) responseParts.get(0);
-
-        return (String) firstPart.get("text");
+        return callGemini(prompt);
     }
-    public String buildReviewPrompt(String questionText, String language, String code) {
 
+    public String buildRunPrompt(String questionText, String language, String code) {
         StringBuilder prompt = new StringBuilder();
 
-        prompt.append("You are an expert DSA interview evaluator.\n\n");
+        prompt.append("You are an interview coding judge.\n\n");
+        prompt.append("Question:\n").append(questionText).append("\n\n");
+        prompt.append("Language:\n").append(language).append("\n\n");
+        prompt.append("Candidate Code:\n").append(code).append("\n\n");
 
-        prompt.append("Question:\n");
-        prompt.append(questionText).append("\n\n");
+        prompt.append("Evaluate the code ONLY against the example cases explicitly present in the question text.\n");
+        prompt.append("Do not invent hidden edge cases here.\n\n");
 
-        prompt.append("Programming Language:\n");
-        prompt.append(language).append("\n\n");
-
-        prompt.append("Candidate Code:\n");
-        prompt.append(code).append("\n\n");
-
-        prompt.append("Your tasks:\n");
-        prompt.append("1. First classify the solution into one of the following categories:\n");
-        prompt.append("BROKEN -> code likely has compile/runtime issues or clearly incorrect logic\n");
-        prompt.append("SUBOPTIMAL -> solution works but not the best complexity\n");
-        prompt.append("OPTIMAL -> solution is correct and efficient\n\n");
-
-        prompt.append("Return response strictly in this format:\n\n");
-
-        prompt.append("Category:\n");
-        prompt.append("Correctness:\n");
-        prompt.append("Compile Issues:\n");
-        prompt.append("Runtime Issues:\n");
-        prompt.append("Performance Issues:\n");
+        prompt.append("Return strictly in this format:\n");
+        prompt.append("Verdict:\n");
+        prompt.append("Passed Examples:\n");
         prompt.append("Time Complexity:\n");
         prompt.append("Space Complexity:\n");
-        prompt.append("Improvement Suggestion:\n");
-        prompt.append("Final Verdict:\n\n");
-
-        prompt.append("Rules:\n");
-        prompt.append("- If category is BROKEN, focus mainly on compile/runtime issues.\n");
-        prompt.append("- If category is SUBOPTIMAL, suggest improvement but do not give full optimal code.\n");
-        prompt.append("- If category is OPTIMAL, say the solution is interview ready.\n");
-        prompt.append("- Never reveal optimal code in this review stage.\n");
+        prompt.append("Feedback:\n");
 
         return prompt.toString();
     }
 
-    public String reviewCode(String questionText, String language, String code) {
-        String prompt = buildReviewPrompt(questionText, language, code);
+    public String buildSubmitPrompt(String questionText, String language, String code) {
+        StringBuilder prompt = new StringBuilder();
 
+        prompt.append("You are a strict interview judge.\n\n");
+        prompt.append("Question:\n").append(questionText).append("\n\n");
+        prompt.append("Language:\n").append(language).append("\n\n");
+        prompt.append("Candidate Code:\n").append(code).append("\n\n");
+
+        prompt.append("Evaluate the solution more strictly than normal examples.\n");
+        prompt.append("Consider edge cases like empty input, single element, duplicates, negatives, boundaries, large N, invalid assumptions.\n");
+        prompt.append("Do NOT provide corrected code.\n\n");
+
+        prompt.append("Return strictly in this format:\n");
+        prompt.append("Verdict:\n");
+        prompt.append("Passed Examples:\n");
+        prompt.append("Time Complexity:\n");
+        prompt.append("Space Complexity:\n");
+        prompt.append("Feedback:\n");
+
+        return prompt.toString();
+    }
+
+    public String buildReviewPrompt(String questionText, String language, String code) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("You are an expert DSA interview evaluator.\n\n");
+        prompt.append("Question:\n").append(questionText).append("\n\n");
+        prompt.append("Programming Language:\n").append(language).append("\n\n");
+        prompt.append("Candidate Code:\n").append(code).append("\n\n");
+
+        prompt.append("Your only task is to determine whether there is a better approach and compare complexities.\n");
+        prompt.append("Do not focus on example test-case execution.\n");
+        prompt.append("Do not provide full optimal code.\n\n");
+
+        prompt.append("Return strictly in this format:\n");
+        prompt.append("Category:\n");
+        prompt.append("Current Time Complexity:\n");
+        prompt.append("Better Time Complexity:\n");
+        prompt.append("Current Space Complexity:\n");
+        prompt.append("Better Space Complexity:\n");
+        prompt.append("Improvement Suggestion:\n");
+        prompt.append("Final Verdict:\n");
+
+        return prompt.toString();
+    }
+
+    public String runCode(String questionText, String language, String code) {
+        return callGemini(buildRunPrompt(questionText, language, code));
+    }
+
+    public String submitCode(String questionText, String language, String code) {
+        return callGemini(buildSubmitPrompt(questionText, language, code));
+    }
+
+    public String reviewCode(String questionText, String language, String code) {
+        return callGemini(buildReviewPrompt(questionText, language, code));
+    }
+
+    private String callGemini(String prompt) {
         String url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + apiKey;
 
         HttpHeaders headers = new HttpHeaders();
